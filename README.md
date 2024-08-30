@@ -8,13 +8,13 @@ This repository contains two comprehensive practicum projects completed during m
 
 This project involved building a relational database to analyze bird strike incidents on aircraft using a dataset from the FAA. The tasks included schema design, data loading, SQL querying, and basic data analysis using R.
 
-- [Read more about Practicum I](./"Relational_Database/README.md)
+- [Read more about Practicum I](/Relational_Database/README.md)
 
 ### Practicum II: Pharmaceutical Sales Data Warehousing
 
 This project focused on transforming data from XML documents into a transactional database in SQLite and then into an analytical database in MySQL using a star schema. The final part of the project involved executing complex analytical queries and generating reports.
 
-- [Read more about Practicum II](./Mine_A_Database/README.md)
+- [Read more about Practicum II](/Mine_A_Database/README.md)
 
 ## Skills Demonstrated
 
