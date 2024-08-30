@@ -1,0 +1,125 @@
+---
+title: "Analytical Report"
+author: "Kyle Fairbairn"
+date: "2023/08/04"
+---
+
+
+## Introduction
+This report presents the results of the analytical queries from the MySQL data warehouse for weekly analysis.
+
+## Analytical Query I: Top Five Sales Reps with the Most Sales Broken Down by Year
+
+### Query Description
+The following query retrieves the top five sales reps with the most sales, broken down by year.
+
+```{r InstallPackages}
+# Packages used for Practicum II 
+packages <- c("RMySQL","RSQLite", "DBI", "lubridate", "ggplot2")
+
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Packages loading
+invisible(lapply(packages, library, character.only = TRUE))
+
+```
+
+```{r connectToRemoteDb}
+connectToRemoteDb <- function () {
+  
+  db_name_fh <- "sql9637031"
+  db_user_fh <- "sql9637031"
+  db_host_fh <- "sql9.freemysqlhosting.net"
+  db_pwd_fh <- "PASSWORD"
+  db_port_fh <- 3306
+  
+  # Connect to remote server database
+  mydb.fh <-  dbConnect(RMySQL::MySQL(), user = db_user_fh, password = db_pwd_fh,
+                        dbname = db_name_fh, host = db_host_fh, port = db_port_fh)
+  
+  mydb <- mydb.fh
+  
+  return(mydb)
+}
+
+connectToLocalDb <- function() {
+  mydb <- dbConnect(RSQLite::SQLite(), dbname = "sales.db")
+  return (mydb)
+}
+
+mysqlDb <- connectToRemoteDb()
+sqlLiteDb <- connectToLocalDb()
+```
+
+## Top Five Sales Reps 
+
+## To summarize the report
+### There is the sales reps name 
+### There assigned location of sales to help determine the market
+
+
+```{sql connection=mysqlDb}
+
+SELECT 
+    year,
+    sales_rep_name,
+    total_sold AS total_sales,
+    region as Region
+FROM 
+    rep_facts
+GROUP BY 
+    year, sales_rep_name
+ORDER BY 
+    year, total_sales DESC
+LIMIT 5;
+
+
+```
+## Analytical Query II: Total sold per year.
+
+## Total Sales for the year 2020 by month 
+### If a rep sold zero they wont be on graph 
+
+```{r}
+
+query <- "SELECT 
+            year, 
+            month, 
+            sales_rep_name as Sales_Rep,
+            total_monthly_sales AS total_monthly_sales
+          FROM 
+            rep_facts
+          GROUP BY 
+            year, month, sales_rep_name
+          ORDER BY 
+            year, month;"
+
+
+result <- dbGetQuery(mysqlDb, query)
+
+# Convert year and month columns to a single date column
+result$date <- as.Date(paste(result$year, result$month, "01", sep = "-"))
+
+ggplot(result, aes(x = date, y = total_monthly_sales, color = Sales_Rep)) +
+  geom_line() +
+  labs(title = "Total Monthly Sales per Sales Rep",
+       x = "Date",
+       y = "Total Monthly Sales") +
+  scale_y_continuous(labels = scales::comma) +  # Format y-axis labels with commas
+  theme_minimal()
+
+```
+
+
+
+
+```{r}
+dbDisconnect(mysqlDb)
+dbDisconnect(sqlLiteDb)
+```
+
+
