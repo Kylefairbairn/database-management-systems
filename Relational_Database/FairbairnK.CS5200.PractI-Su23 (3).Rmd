@@ -1,0 +1,856 @@
+---
+title: "Practicum I CS5200 Full Summer"
+output: word_document
+---
+
+```{r installPackages, eval=TRUE}
+
+# Packages used for Practicum I 
+packages <- c("base","datasets","DBI","graphics","grDevices","methods", "RMySQL", "stats","utils")
+
+# Install packages not yet installed
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Packages loading
+invisible(lapply(packages, library, character.only = TRUE))
+
+```
+
+
+
+```{r connectToRemoteServer, eval=TRUE}
+
+# Name: connectToDB
+# Description: Connects to remote SQL server limit 5mb
+# Parameters: N/A
+# Returns: The DB
+
+connectToDb <- function () {
+
+db_name_fh <- "sql9628267"
+db_user_fh <- "sql9628267"
+db_host_fh <- "sql9.freemysqlhosting.net"
+db_pwd_fh <- "ke4WFIpEZG"
+db_port_fh <- 3306
+
+# 3. Connect to remote server database
+mydb.fh <-  dbConnect(RMySQL::MySQL(), user = db_user_fh, password = db_pwd_fh,
+                      dbname = db_name_fh, host = db_host_fh, port = db_port_fh)
+
+mydb <- mydb.fh
+
+return(mydb)
+
+}
+```
+
+```{r connectToLocalServer, eval=TRUE}
+
+# Name: connectToDB
+# Description: Connects to local SQL server limit 
+# Parameters: N/A
+# Returns: The DB
+
+connectToLocalDB <- function() {
+  db_name_fh <- "test"
+  db_user_fh <- "root"
+  db_host_fh <- "localhost"
+  db_pwd_fh <- "password"
+  db_port_fh <- 3306
+
+  # Connect to the MySQL server
+  mydb <- dbConnect(RMySQL::MySQL(), user = db_user_fh, password = db_pwd_fh,
+                      dbname = db_name_fh, host = db_host_fh, port = db_port_fh)
+
+
+  return(mydb)
+}
+
+
+```
+
+
+```{r connectToDbServer, eval=TRUE}
+# remote db
+#mydb <- connectToDb()
+
+# local db will use for demo because of limits 
+mydb <- connectToLocalDB()
+```
+
+
+```{sql createDb, connection=mydb}
+
+# Creating db locally for assignment 
+CREATE DATABASE IF NOT EXISTS birdStrikes;
+
+```
+
+```{sql allowExtraction, connection=mydb}
+
+# allows to read from csv file 
+SET GLOBAL local_infile = TRUE;
+
+```
+
+```{r dropAirportTable, eval=TRUE}
+
+# Name: dropAirportsTable
+# Description: Drops airport table
+# Parameters: db connection
+# Returns: N/A
+
+dropAirportsTable <- function(db) {
+  createDropStatement <- "DROP TABLE IF EXISTS airports;"
+  dbExecute(db,createDropStatement)
+}
+
+```
+
+
+```{r createAirportsTable, eval=TRUE}
+
+createAirportsTable <- function(db) {
+  
+  ## 4B Create table airports
+  
+  # Name: createAirportsTable
+  # Description: creates airport table
+  # Parameters: db connection
+  # Returns: N/A
+  
+  createTableStatement <- "CREATE TABLE airports (
+    aid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    airportState TEXT,
+    airportCode TEXT
+  )"
+  
+  dbExecute(db, createTableStatement)
+}
+
+```
+
+```{r dropConditionsTable, eval=TRUE}
+
+  # Name: dropConditionsTable
+  # Description: drops conditions table
+  # Parameters: db connection
+  # Returns: N/A
+
+dropConditionsTable <- function(db) {
+  createDropStatement <- "DROP TABLE IF EXISTS conditions;"
+  dbExecute(db,createDropStatement)
+}
+```
+
+```{r createConditionsTable, eval=TRUE}
+createConditionsTable <- function(db) {
+  
+  ## 4D Create look-up table conditions
+  
+  # Name: createConditionsTable
+  # Description: creates conditions table
+  # Parameters: db connection
+  # Returns: N/A
+  
+  createTableStatement <- " CREATE TABLE conditions (
+    cid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    sky_condition TEXT(255),
+    explanation TEXT(255)
+  )"
+  
+  dbExecute(db, createTableStatement)
+}
+```
+
+
+```{r dropFlightsTable, eval=TRUE}
+
+  # Name: dropFlightsTable
+  # Description: drops flights table
+  # Parameters: db connection
+  # Returns: N/A
+
+dropFlightsTable <- function(db) {
+  createDropStatement <- "DROP TABLE IF EXISTS flights;"
+  dbExecute(db,createDropStatement)
+}
+```
+
+```{r createFlightsTable, eval=TRUE}
+createFlightsTable <- function(db) {
+  
+  ## 4A Create table flights
+  ## 4C link flights with airport 
+  
+  # Name: createFlightsTable
+  # Description: create flights table
+  # Parameters: db connection
+  # Returns: N/A
+  
+  createTableStatement <- " CREATE TABLE flights (
+  fid INTEGER AUTO_INCREMENT PRIMARY KEY,
+  date DATE,
+  origin INTEGER NOT NULL,
+  airline TEXT,
+  aircraft TEXT,
+  altitude INTEGER CHECK (altitude >= 0),
+  heavy BOOLEAN,
+  FOREIGN KEY (origin) REFERENCES airports (aid)
+  )"
+  
+  dbExecute(db, createTableStatement)
+}
+```
+
+```{r dropStrikesTable, eval=TRUE}
+
+  # Name: dropStrikesTable
+  # Description: drops strikes table
+  # Parameters: db connection
+  # Returns: N/A
+
+dropStrikesTable <- function(db) {
+  createDropStatement <- "DROP TABLE IF EXISTS strikes;"
+  dbExecute(db,createDropStatement)
+}
+```
+
+```{r createStrikesTable, eval=TRUE}
+createStrikesTable <- function(db) {
+  
+  ## 4E Create table strikes
+  ## 4F Link strikes and flights
+  
+  # Name: createStrikesTable
+  # Description: creates strikes table
+  # Parameters: db connection
+  # Returns: N/A
+  
+  createTableStatement <- " CREATE TABLE strikes (
+    sid INTEGER AUTO_INCREMENT PRIMARY KEY,
+    fid INTEGER NOT NULL,
+    numbirds INTEGER,
+    impact TEXT, 
+    damage BOOLEAN,
+    altitude INTEGER CHECK (altitude >= 0),
+    conditions INTEGER NOT NULL,
+    FOREIGN KEY (conditions) REFERENCES conditions (cid),
+    FOREIGN KEY (fid) REFERENCES flights (fid)
+  )"
+  
+  dbExecute(db, createTableStatement)
+}
+```
+
+
+
+```{r testingTables, eval=TRUE}
+
+# creating tables for 4G showing tables
+
+  # Name: testingTables
+  # Description: creates tables to show they are working
+  # Parameters: N/A
+  # Returns: N/A
+
+dropStrikesTable(mydb)
+dropFlightsTable(mydb)
+dropConditionsTable(mydb)
+dropAirportsTable(mydb)
+
+createAirportsTable(mydb)
+createConditionsTable(mydb)
+createFlightsTable(mydb)
+createStrikesTable(mydb)
+
+```
+
+```{sql airportInsert1, connection=mydb, eval = F}
+
+#4G Test table definitions
+
+# Name: airportInsert
+# Description: inserts into airport table
+# Parameters: N/A
+# Returns: N/A
+
+INSERT INTO airports (airportState, airportCode)
+VALUES ('IL', 'JFK'),
+       ('CA', 'LAX'),
+       ('MA', 'BOS');
+
+```
+
+```{sql airportSelect1, connection=mydb, eval = F}
+
+# Name: airportSelect
+# Description: selects all records from airport table
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM airports;
+
+```
+
+
+```{sql airportDelete1, connection=mydb, eval = F}
+
+# Name: airportDelete
+# Description: deletes one record with the pk of 2. 
+# Parameters: N/A
+# Returns: N/A
+
+DELETE FROM airports WHERE aid = 2;
+
+```
+
+```{sql airportSelect2, connection=mydb, eval = F}
+
+# Name: airportSelect
+# Description: selects all records for airports table
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM airports;
+
+```
+
+
+```{sql airportInsert2, connection=mydb, eval = F}
+
+#4G Test table definitions
+
+# Name: airportInsert
+# Description: inserts into airports table
+# Parameters: N/A
+# Returns: N/A
+
+INSERT INTO airports (airportState, airportCode)
+VALUES ('Testing', 'Testing')
+
+```
+
+```{sql conditionsInsert1, connection=mydb, eval = F}
+
+#4G Test table definitions
+
+# Name: conditionsInsert
+# Description: inserts into conditions table
+# Parameters: N/A
+# Returns: N/A
+
+INSERT INTO conditions (sky_condition, explanation)
+VALUES ('Clear', "testing"),
+       ('Cloudy', "testing"),
+       ('Rainy', "testing");
+
+```
+
+```{sql conditionsSelect1, connection=mydb, eval = F}
+
+# Name: conditionsSelect
+# Description: selects all from conditions table
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM conditions;
+
+```
+
+
+```{sql flightsInsert1, connection=mydb, eval = F}
+
+#4G Test table definitions
+
+# Name: flightsInsert
+# Description: inserts into flights table
+# Parameters: N/A
+# Returns: N/A
+
+INSERT INTO flights ( date, origin, airline, aircraft, altitude, heavy)
+VALUES ('2023-06-01', 1, 'Delta Air Lines', 'Boeing 737', 35000, TRUE),
+       ('2023-06-02', 3, 'United Airlines', 'Airbus A320', 28000, FALSE),
+       ('2023-06-03', 4, 'American Airlines', 'Boeing 777', 32000, TRUE);
+
+```
+
+```{sql flightsSelect1, connection=mydb, eval = F}
+
+# Name: flightsSelect
+# Description: selects all from flights table
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM flights;
+
+```
+
+```{sql strikesInsert1, connection=mydb, eval = F}
+
+#4G Test table definitions
+
+# Name: strikesInsert
+# Description: inserts into strikes table
+# Parameters: N/A
+# Returns: N/A
+
+INSERT INTO strikes (fid, numbirds, impact, damage, altitude, conditions)
+VALUES (1, 3000, 'Engine ingestion', TRUE, 32000, 1),
+       (2, 2000, 'Windshield strike', FALSE, 25000, 2),
+       (3, 1000, 'Wing collision', TRUE, 31000, 3);
+
+```
+
+
+```{sql strikesSelect1, connection=mydb}
+
+#4G Test table definitions
+
+# Name: strikesSelect
+# Description: selects all from strikes table
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM strikes;
+```
+
+```{r readingCsvFile, eval=TRUE}
+
+# Name: readingCsvFile
+# Description: reads into csv file 
+# Parameters: N/A
+# Returns: bds.raw: dataframe
+
+# Read all data from the csv file 
+bds.raw <- read.csv("birdStrikesData-V2.csv", header = TRUE)
+
+```
+
+
+```{r subsetOfData, eval=FALSE}
+
+# Name: readingCsvFile
+# Description: reads a subset of csv file 
+# Parameters: N/A
+# Returns: subset_data: dataframe
+
+subset_size <- 4
+
+# Create a subset of data 
+subset_data <- bds.raw[sample(nrow(bds.raw), subset_size), ]
+
+```
+
+```{r prepForCsvExtraction, eval=TRUE}
+
+# Name: prepForCsvExtraction
+# Description: deleting test data and re-creating for csv extraction 
+# Parameters: N/A
+# Returns: N/A
+
+
+dropStrikesTable(mydb)
+dropFlightsTable(mydb)
+dropConditionsTable(mydb)
+dropAirportsTable(mydb)
+
+createAirportsTable(mydb)
+createConditionsTable(mydb)
+createFlightsTable(mydb)
+createStrikesTable(mydb)
+
+```
+
+```{r populateAirportsTableFromCsv, eval=TRUE}
+
+# Name: populateAirportsTableFromCsv
+# Description: populates data from csv and inserts into airport table
+# Parameters: N/A
+# Returns: N/A
+
+populateAirportsTableFromCsv <- function(db, airportDataFrame) {
+
+  table_name <- "airports"
+
+  # creating data frame using ifelse to error check data
+  data_selected <- data.frame(
+    airportState = ifelse(airportDataFrame$origin == "N/A", "UNKNOWN", airportDataFrame$origin)
+  )
+  
+  # Making airportCode NULL
+  data_selected$airportCode <- "NULL"
+  
+  # Adding aid(PK) which are sequential values 1-N 
+  data_selected$aid <- seq_len(nrow(data_selected))
+
+  # append data into target table 
+  dbWriteTable(db, table_name, data_selected, append = TRUE, row.names = FALSE)
+}
+
+```
+
+```{r runPopulateAirportsTableFromCsv, eval=TRUE}
+
+# Name: populateAirportsTableFromCsv
+# Description: running function
+# Parameters: N/A
+# Returns: N/A
+
+populateAirportsTableFromCsv(mydb, bds.raw)
+```
+
+```{sql airportSelect3, connection=mydb, eval = T}
+
+# Name: airportSelect
+# Description: showing data from airport table after extraction
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM airports;
+
+```
+
+```{r populateConditionsTableFromCsv, eval=TRUE}
+
+# Name: populateConditionsTableFromCsv
+# Description: populates data from csv and inserts into conditions table
+# Parameters: N/A
+# Returns: N/A
+
+populateConditionsTableFromCsv <- function(db, dataFrame) {
+
+table_name <- "conditions"
+
+# creating data frame using ifelse to error check data
+data_selected <- data.frame(
+    sky_condition = dataFrame$sky_conditions,
+    explanation = ifelse(dataFrame$Remarks == "", "UNKNOWN", dataFrame$Remarks)
+)
+
+ # Adding cid(PK) which are sequential values 1-N
+data_selected$cid <- seq_len(nrow(data_selected))
+
+# append data into target table 
+dbWriteTable(db, table_name, data_selected, append = TRUE, row.names = FALSE)
+
+}
+```
+
+```{r runPopulateConditionsTableFromCsv, eval=TRUE}
+
+
+populateConditionsTableFromCsv(mydb, bds.raw)
+```
+
+```{sql conditionsSelect2, connection=mydb, eval = T}
+
+# Name: conditionsSelect
+# Description: showing data from conditions table after extraction
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM conditions;
+
+```
+
+```{r populateFlightsTableFromCsv, eval=TRUE}
+
+# Name: populateFlightsTableFromCsv
+# Description: populates data from csv and inserts into flights table
+# Parameters: N/A
+# Returns: N/A
+populateFlightsTableFromCsv <- function(db, dataFrame) {
+
+table_name <- "flights" 
+
+# Create data frame 
+dataFrame$flight_date <- as.Date(dataFrame$flight_date, format = "%m/%d/%Y")
+ 
+data_selected <- data.frame(
+  date = dataFrame$flight_date,
+  airline = ifelse(is.na(dataFrame$airline), "UNKNOWN",dataFrame$airline),
+  aircraft = ifelse(is.na(dataFrame$aircraft), "UNKNOWN",dataFrame$aircraft),
+  altitude = ifelse(is.na(dataFrame$altitude_ft), 0,dataFrame$aircraft),
+  heavy = ifelse(tolower(dataFrame$heavy_flag) == "yes", 1, 0)
+)
+
+ # Adding fid(PK) which are sequential values 1-N
+data_selected$fid <- seq_len(nrow(data_selected))
+ # Adding origin(FK) which are sequential values 1-N 
+data_selected$origin <-seq_len(nrow(data_selected))
+
+# append data into target table 
+dbWriteTable(db, table_name, data_selected, append = TRUE, row.names = FALSE)
+}
+
+```
+
+```{r RunPopulateFlightsTableFromCsv, eval=TRUE}
+
+# Name: populateFlightsTableFromCsv
+# Description: populates data from csv and inserts into flights table
+# Parameters: N/A
+# Returns: N/A
+populateFlightsTableFromCsv(mydb, bds.raw)
+```
+
+```{sql flightsSelect2, connection=mydb, eval=T}
+
+# Name: flightsSelect
+# Description: showing data from flights table after extraction
+# Parameters: N/A
+# Returns: N/A
+
+SELECT * FROM flights;
+
+```
+
+```{r populateStrikesTableFromCsv, eval=TRUE}
+
+# Name: populateStrikesTableFromCsv
+# Description: populates data from csv and inserts into strikes table
+# Parameters: N/A
+# Returns: N/A
+populateStrikesTableFromCsv <- function(db, dataFrame) {
+  table_name <- "strikes" 
+
+  # create data frame
+  data_selected <- data.frame(
+    numbirds = ifelse(is.na(dataFrame$wildlife_struck), 0,dataFrame$wildlife_struck),
+    impact = ifelse(is.na(dataFrame$impact), "UNKNOWN",dataFrame$impact),
+    damage = ifelse(tolower(dataFrame$damage) == "no damage", 0, 1),
+    altitude = ifelse(is.na(dataFrame$altitude_ft), 0, dataFrame$altitude_ft)
+  )
+  # Creating PK and FK for table
+  data_selected$sid <- seq_len(nrow(data_selected))
+  data_selected$fid <- seq_len(nrow(data_selected))
+  data_selected$conditions <- seq_len(nrow(data_selected))
+  
+  dbWriteTable(db, table_name, data_selected, append = TRUE, row.names = FALSE)
+}
+```
+
+```{r runRopulateStrikesTableFromCsv, eval=TRUE}
+
+# Name: populateStrikesTableFromCsv
+# Description: populates data from csv and inserts into strikes table
+# Parameters: N/A
+# Returns: N/A
+populateStrikesTableFromCsv(mydb, bds.raw)
+```
+
+```{sql strikesSelect2, connection=mydb, eval =T}
+
+# Name: strikesSelect
+# Description: showing data from strikes table after extraction
+# Parameters: N/A
+# Returns: N/A
+SELECT * FROM strikes;
+
+```
+
+
+```{r topTenStates, eval=TRUE}
+
+# description
+# 1: Select statement - selecting the airportState and counting the number of
+# incidents labeled as num_incidents
+# 2: Selecting from airports table
+# 3: Joining airports table and flights table into a temp table
+# 4: Joining flights table and strikes table into a temp table
+# 5: Group data by the state
+# 6: Order by the number of incidents in descending order
+# 7: Limit to the first 10 records
+
+query <- "SELECT airportState, COUNT(*) AS num_incidents
+          FROM airports
+          JOIN flights ON airports.aid = flights.origin
+          JOIN strikes ON flights.fid = strikes.fid
+          GROUP BY airportState
+          ORDER BY num_incidents DESC
+          LIMIT 10;"
+result <- dbGetQuery(mydb, query)
+
+print(result)
+```
+
+```{r aboveAverageBirdStrikes, eval=TRUE}
+
+# 1: Selects airline and will count the incidents as num_incidents
+# 2: Selecting from flights 
+# 3: Joining both tables into a temporary table
+# 4: group by airline
+# 5C: Find the total number of incidents for each airline
+# 5B: Find the average of those incidents
+# 5A: Find each record that is greater than the average.
+# 6: Order incidents in descending order 
+
+query <- "SELECT airline, COUNT(*) AS num_incidents
+          FROM flights
+          JOIN strikes ON flights.fid = strikes.fid
+          GROUP BY airline
+          HAVING COUNT(*) > (SELECT AVG(incident_count) FROM (SELECT COUNT(*) AS incident_count FROM flights JOIN strikes ON flights.fid = strikes.fid GROUP BY airline) AS subquery)
+          ORDER BY num_incidents DESC;"
+result <- dbGetQuery(mydb, query)
+
+print(result)
+
+```
+
+```{r totalBirdStrikesByMonth, eval=TRUE}
+
+# 1: Select the month from date ie 2000-11-23 -> 11 and sum the number of bird 
+#    strikes as total_birds
+# 2: Selecting from strikes 
+# 3: Join both tables
+# 4: Group by the month
+# 5: Order by month in ascending order
+
+# N/A is dates that are missing, 
+
+query <- "SELECT MONTH(date) AS month, CAST(SUM(numbirds) AS SIGNED INTEGER) AS total_birds
+          FROM strikes
+          JOIN flights ON strikes.fid = flights.fid
+          GROUP BY month
+          ORDER BY month;"
+
+
+result <- dbGetQuery(mydb, query)
+
+head(result, 6)
+```
+
+```{r graphBirdStrikes}
+
+
+
+# basic setup up for graph 
+plot(result$month, result$total_birds, type = "n", xlab = "Month", ylab = "Number of Birds",
+     main = "Number of Birds Striking Aircraft by Month", ylim = c(0, max(result$total_birds)*1.1),
+     xlim = c(0.5, 12.5))  # Adjusted x-axis limits
+
+# structure for the graph
+barplot(result$total_birds, names.arg = result$month, col = "blue", border = "black", 
+        xlab = "Month", ylab = "Number of Birds", main = "Number of Birds Striking Aircraft by Month", space = 4)
+
+
+# Legend
+legend("topright", legend = "Total Birds", fill = "blue")
+
+# grid lines on 
+grid()
+
+```
+
+```{r deleteStrikeData, eval=TRUE}
+# Deleting data to show procedure 
+dropStrikesTable(mydb)
+createStrikesTable(mydb)
+
+```
+
+
+```{sql createProcedure, connection=mydb, eval = T}
+
+DROP PROCEDURE IF EXISTS AddBirdStrike;
+
+```
+
+
+
+```{sql AddBirdStrike, connection=mydb, eval = T}
+
+# 1: IN requires all the fields to create a new strike 
+# 2: DECLARE the PK/FKs needed
+# 3: Insert into tables 
+# 4: LAST_INSERT_ID() returns the last auto-increment
+# 5: 
+
+
+CREATE PROCEDURE AddBirdStrike (
+  IN date DATE,
+  IN airline TEXT,
+  IN aircraft TEXT,
+  IN altitude INT,
+  IN heavy BOOLEAN,
+  IN num_birds INT,
+  IN impact TEXT,
+  IN damage BOOLEAN,
+  IN sky_condition TEXT,
+  IN explanation TEXT,
+  IN airportState TEXT,
+  IN airportCode TEXT
+)
+BEGIN
+  DECLARE aid INT;
+  DECLARE cid INT;
+  DECLARE fid INT;
+  
+  INSERT IGNORE INTO airports (airportState, airportCode)
+  VALUES (airportState, airportCode);
+  
+  SET aid = LAST_INSERT_ID();
+  
+  INSERT IGNORE INTO flights (date, origin, airline, aircraft, altitude, heavy)
+  VALUES (date, aid, airline, aircraft, altitude, heavy);
+  
+  SET fid = LAST_INSERT_ID();
+  
+  INSERT IGNORE INTO conditions (sky_condition, explanation)
+  VALUES (sky_condition, explanation);
+  
+  SET cid = LAST_INSERT_ID();
+ 
+  INSERT INTO strikes (fid, numbirds, impact, damage, altitude, conditions)
+  VALUES (fid, num_birds, impact, damage, altitude, cid);
+  
+  
+END;
+
+
+```
+
+```{r testingAddBirdStrike, eval=TRUE}
+
+statement <- sprintf("CALL AddBirdStrike('%s', '%s', '%s', %d, %s, %d, '%s', %s, '%s', '%s', '%s', '%s')",
+                     "2023-06-01",
+                     "TESTING",
+                     "TESTING",
+                     35000,
+                     "TRUE",
+                     3000,
+                     "TESTING",
+                     "TRUE",
+                     "Normal",
+                     "Explanation",
+                     "New York",
+                     "JFK")
+
+# Execute the stored procedure
+dbExecute(mydb, statement)
+
+```
+
+
+```{sql selectStrikes3, connection=mydb, eval = T}
+
+SELECT * FROM strikes
+
+```
+
+```{r dropTables, eval=TRUE}
+dropStrikesTable(mydb)
+dropFlightsTable(mydb)
+dropConditionsTable(mydb)
+dropAirportsTable(mydb)
+```
+
+```{r disconnectDB, eval=TRUE}
+  dbDisconnect(mydb)
+```
+
+
